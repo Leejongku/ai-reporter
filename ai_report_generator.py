@@ -57,7 +57,7 @@ def format_for_prompt(articles: list[dict]) -> str:
         lines.append(
             f"[{a['source']}] {a['title']}\n"
             f"{a['summary']}\n"
-            f"※ 출처: {a['source']}, {date_str}\n"
+            f"※ 출처: {a['source']}, {date_str}, URL: {a['link']}\n"
         )
     return "\n".join(lines)
 
@@ -68,10 +68,12 @@ def build_prompt(news_text: str, today: str) -> str:
 
 [작성 규칙]
 - 번호 체계는 반드시 1. → 가. → 1) 3단계만 사용
+- 각 항목(1), 2) 등)은 반드시 별도 줄에 작성하고, 항목 사이에 빈 줄 삽입할 것
 - 각 항목은 단순 요약이 아닌 의미·배경·영향을 포함하여 2~4문장으로 상세히 서술
-- 모든 항목 끝에 반드시 출처 명시: ※ 출처: 매체명, YYYY.MM.DD
+- 문체는 반드시 "~함", "~됨", "~임", "~예정임", "~것으로 보임" 등 명사형 종결어미 사용 (절대 "~습니다", "~입니다" 금지)
+- 한자 사용 금지 (예: 擴大→확대, 推進→추진 등 모두 한글로 작성)
+- 모든 항목 끝에 반드시 출처 명시: ※ 출처: 매체명, YYYY.MM.DD, URL
 - 뉴스가 없는 섹션은 "해당 동향 없음"으로 표기
-- 전문 보고서 문체로 한국어 작성 (구어체 금지)
 - 시사점은 단순 사실 나열이 아닌 전략적 관점의 인사이트 제시
 - 반드시 각 소제목(가. 나. 다.) 앞뒤로 빈 줄을 삽입할 것
 - 반드시 각 대제목(1. 2. 3. 4.) 앞뒤로 빈 줄을 삽입할 것
@@ -164,25 +166,34 @@ def generate_report(news_text: str, today: str) -> str:
     return response.choices[0].message.content
 
 
+def remove_hanja(text: str) -> str:
+    """한자 제거 (CJK Unified Ideographs 범위)"""
+    return re.sub(r'[\u4e00-\u9fff]', '', text)
+
+
 def fix_line_breaks(report: str) -> str:
-    """대제목·소제목·항목 앞뒤 빈 줄 보정"""
+    """대제목·소제목·세부항목 앞뒤 빈 줄 보정 및 한자 제거"""
+    report = remove_hanja(report)
     lines = report.splitlines()
     result = []
-    for i, line in enumerate(lines):
+    for line in lines:
         stripped = line.strip()
-        # 대제목 (1. 2. 3. 4.) 앞에 빈 줄 추가
+        # 대제목 (1. 2. 3. 4.) 앞에 빈 줄
         if stripped and stripped[0].isdigit() and len(stripped) > 1 and stripped[1] == '.':
             if result and result[-1] != '':
                 result.append('')
-        # 소제목 (가. 나. 다. 라.) 앞에 빈 줄 추가
+        # 소제목 (가. 나. 다. 라.) 앞에 빈 줄
         if stripped and stripped[0] in '가나다라마바사' and len(stripped) > 1 and stripped[1] == '.':
             if result and result[-1] != '':
                 result.append('')
+        # 세부항목 (1) 2) 3) ...) 앞에 빈 줄
+        if re.match(r'^\s+\d+\)', line) and result and result[-1].strip() != '':
+            result.append('')
         result.append(line)
-        # 대제목·소제목 뒤에 빈 줄 추가
+        # 대제목 뒤에 빈 줄
         if stripped and stripped[0].isdigit() and len(stripped) > 1 and stripped[1] == '.':
             result.append('')
-    # 연속된 빈 줄 2개 이상 → 1개로
+    # 연속 빈 줄 → 1개로
     cleaned = []
     prev_blank = False
     for line in result:
