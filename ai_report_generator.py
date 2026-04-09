@@ -214,6 +214,63 @@ def save_report(report: str, today_str: str) -> Path:
     return filename
 
 
+def convert_to_pdf(md_path: Path, today_str: str) -> Path:
+    """마크다운 → HTML → PDF 변환"""
+    import markdown
+    from weasyprint import HTML, CSS
+
+    md_text = md_path.read_text(encoding="utf-8")
+
+    # 마크다운 → HTML
+    html_body = markdown.markdown(md_text, extensions=["tables", "nl2br"])
+
+    html = f"""<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap');
+    body {{
+      font-family: 'Noto Sans KR', 'NanumGothic', sans-serif;
+      font-size: 11pt;
+      line-height: 1.8;
+      margin: 40px 50px;
+      color: #222;
+    }}
+    h1 {{ font-size: 18pt; text-align: center; margin-bottom: 4px; }}
+    h2 {{ font-size: 13pt; margin-top: 24px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }}
+    h3 {{ font-size: 11pt; margin-top: 16px; }}
+    p  {{ margin: 6px 0; }}
+    table {{
+      border-collapse: collapse;
+      width: 100%;
+      margin: 12px 0;
+      font-size: 10pt;
+    }}
+    th, td {{
+      border: 1px solid #bbb;
+      padding: 6px 10px;
+      text-align: left;
+    }}
+    th {{ background-color: #f0f0f0; font-weight: bold; }}
+    blockquote {{
+      background: #f9f9f9;
+      border-left: 4px solid #aaa;
+      margin: 8px 0;
+      padding: 6px 12px;
+    }}
+  </style>
+</head>
+<body>
+{html_body}
+</body>
+</html>"""
+
+    pdf_path = REPORT_DIR / f"AI동향보고서_{today_str}.pdf"
+    HTML(string=html, base_url=str(REPORT_DIR)).write_pdf(str(pdf_path))
+    return pdf_path
+
+
 def main():
     now     = datetime.datetime.now()
     today   = now.strftime("%Y.%m.%d")
@@ -232,11 +289,16 @@ def main():
     print("2) Groq API로 보고서 생성 중...")
     report = generate_report(news_text, today)
 
-    print("3) 줄바꿈 보정 및 파일 저장 중...")
+    print("3) 줄바꿈 보정 및 MD 저장 중...")
     report = fix_line_breaks(report)
-    path = save_report(report, today_s)
+    md_path = save_report(report, today_s)
+    print(f"   MD 저장: {md_path}")
 
-    print(f"\n완료! 저장 위치: {path}")
+    print("4) PDF 변환 중...")
+    pdf_path = convert_to_pdf(md_path, today_s)
+    print(f"   PDF 저장: {pdf_path}")
+
+    print(f"\n완료!")
     print("-" * 50)
     print(report[:500] + "...")
 

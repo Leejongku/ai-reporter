@@ -16,6 +16,14 @@ jobs:
       - name: 코드 체크아웃
         uses: actions/checkout@v4
 
+      - name: 시스템 의존성 설치 (WeasyPrint + 한글 폰트)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+            libpango-1.0-0 libpangoft2-1.0-0 libpangocairo-1.0-0 \
+            libcairo2 libgdk-pixbuf2.0-0 libffi-dev \
+            fonts-nanum fonts-nanum-coding
+
       - name: Python 설정
         uses: actions/setup-python@v5
         with:
