@@ -121,7 +121,7 @@ def generate_report(news_text: str, today: str) -> str:
 
     client = genai.Client(api_key=api_key)
     response = client.models.generate_content(
-        model="gemini-1.5-flash",
+        model="gemini-2.0-flash-lite",
         contents=build_prompt(news_text, today)
     )
     return response.text
