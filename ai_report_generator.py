@@ -2,7 +2,7 @@ import os
 import re
 import datetime
 import feedparser
-from google import genai
+from groq import Groq
 from pathlib import Path
 
 # =============================================
@@ -115,16 +115,20 @@ def build_prompt(news_text: str, today: str) -> str:
 
 
 def generate_report(news_text: str, today: str) -> str:
-    api_key = os.environ.get("GEMINI_API_KEY")
+    api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
-        raise ValueError("GEMINI_API_KEY 환경변수가 설정되지 않았습니다.")
+        raise ValueError("GROQ_API_KEY 환경변수가 설정되지 않았습니다.")
 
-    client = genai.Client(api_key=api_key)
-    response = client.models.generate_content(
-        model="gemini-2.0-flash-lite",
-        contents=build_prompt(news_text, today)
+    client = Groq(api_key=api_key)
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{
+            "role": "user",
+            "content": build_prompt(news_text, today)
+        }],
+        max_tokens=4096,
     )
-    return response.text
+    return response.choices[0].message.content
 
 
 def save_report(report: str, today_str: str) -> Path:
@@ -149,7 +153,7 @@ def main():
 
     news_text = format_for_prompt(articles)
 
-    print("2) Gemini API로 보고서 생성 중...")
+    print("2) Groq API로 보고서 생성 중...")
     report = generate_report(news_text, today)
 
     print("3) 파일 저장 중...")
