@@ -2,7 +2,7 @@ import os
 import re
 import datetime
 import feedparser
-import google.generativeai as genai
+from google import genai
 from pathlib import Path
 
 # =============================================
@@ -119,9 +119,11 @@ def generate_report(news_text: str, today: str) -> str:
     if not api_key:
         raise ValueError("GEMINI_API_KEY 환경변수가 설정되지 않았습니다.")
 
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-2.0-flash")
-    response = model.generate_content(build_prompt(news_text, today))
+    client = genai.Client(api_key=api_key)
+    response = client.models.generate_content(
+        model="gemini-1.5-flash",
+        contents=build_prompt(news_text, today)
+    )
     return response.text
 
 
