@@ -1,0 +1,114 @@
+name: MD → PDF 자동 변환
+
+on:
+  push:
+    paths:
+      - 'reports/**.md'   # reports 폴더에 MD 파일 푸시될 때 실행
+
+permissions:
+  contents: write
+
+jobs:
+  convert-pdf:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: 시스템 의존성 설치 (WeasyPrint + 한글 폰트)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+            libpango-1.0-0 libpangoft2-1.0-0 libpangocairo-1.0-0 \
+            libcairo2 libgdk-pixbuf2.0-0 libffi-dev \
+            fonts-nanum fonts-nanum-coding
+
+      - name: Python 설정
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 패키지 설치
+        run: pip install markdown weasyprint
+
+      - name: 변경된 MD 파일 → PDF 변환
+        run: |
+          python - <<'EOF'
+          import re
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          # 변경된 MD 파일 목록 가져오기
+          result = subprocess.run(
+              ["git", "diff", "--name-only", "HEAD~1", "HEAD"],
+              capture_output=True, text=True
+          )
+          changed = [f for f in result.stdout.strip().splitlines() if f.startswith("reports/") and f.endswith(".md")]
+
+          if not changed:
+              print("변환할 MD 파일 없음")
+              sys.exit(0)
+
+          import markdown
+          from weasyprint import HTML
+
+          for md_file in changed:
+              md_path = Path(md_file)
+              if not md_path.exists():
+                  print(f"파일 없음: {md_path}")
+                  continue
+
+              pdf_path = md_path.with_suffix(".pdf")
+              md_text = md_path.read_text(encoding="utf-8")
+              html_body = markdown.markdown(md_text, extensions=["tables", "nl2br"])
+
+              html = f"""<!DOCTYPE html>
+          <html lang="ko">
+          <head>
+            <meta charset="UTF-8">
+            <style>
+              @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap');
+              body {{
+                font-family: 'Noto Sans KR', 'NanumGothic', sans-serif;
+                font-size: 11pt;
+                line-height: 1.8;
+                margin: 40px 50px;
+                color: #222;
+              }}
+              h1 {{ font-size: 18pt; text-align: center; margin-bottom: 4px; }}
+              h2 {{ font-size: 13pt; margin-top: 24px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }}
+              h3 {{ font-size: 11pt; margin-top: 16px; }}
+              p  {{ margin: 6px 0; }}
+              table {{
+                border-collapse: collapse;
+                width: 100%;
+                margin: 12px 0;
+                font-size: 10pt;
+              }}
+              th, td {{
+                border: 1px solid #bbb;
+                padding: 6px 10px;
+                text-align: left;
+              }}
+              th {{ background-color: #f0f0f0; font-weight: bold; }}
+              a {{ color: #1a73e8; }}
+            </style>
+          </head>
+          <body>
+          {html_body}
+          </body>
+          </html>"""
+
+              HTML(string=html).write_pdf(str(pdf_path))
+              print(f"PDF 변환 완료: {pdf_path}")
+          EOF
+
+      - name: PDF 커밋 & 푸시
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add reports/*.pdf
+          git diff --staged --quiet || git commit -m "docs: PDF 자동 변환 $(date +'%Y-%m-%d')"
+          git push
